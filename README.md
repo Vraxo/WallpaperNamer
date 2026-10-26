@@ -28,7 +28,7 @@ python src/wallpaper_namer.py
 
 Edit `src/prompt.md` to change the naming instructions. The script uses the returned title as the filename, removes invalid filename characters, and checks for duplicate names.
 
-## Tests
+## 🧪 Tests
 
 Run from the project directory (no LM Studio server needed):
 
@@ -36,6 +36,6 @@ Run from the project directory (no LM Studio server needed):
 python -m unittest discover -s tests
 ```
 
-## License
+## 📄 License
 
 MIT. See [LICENSE](LICENSE).
