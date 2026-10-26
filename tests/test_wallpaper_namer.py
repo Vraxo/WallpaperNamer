@@ -7,10 +7,10 @@ import unittest
 # Make the standalone scripts importable during test discovery.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from title_generator import parse_title
 from wallpaper_namer import (
     get_unique_filename,
     load_system_prompt,
-    parse_title,
     sanitize_filename,
 )
 

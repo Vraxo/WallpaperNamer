@@ -2,26 +2,13 @@
 # Run from the project directory: python src/wallpaper_namer.py
 from __future__ import annotations
 
-import base64
-import io
 import os
-import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Optional
-
-import requests
 
 from lmstudio import ensure_server_ready
-
-try:
-    from PIL import Image
-    HAS_PILLOW = True
-    PILLOW_ERROR: Optional[Exception] = None
-except Exception as error:
-    HAS_PILLOW = False
-    PILLOW_ERROR = error
+from title_generator import get_new_name_from_model, sanitize_filename
 
 IMAGE_DIR = Path(r"E:\Images\Wallpapers")
 MODEL_NAME = "qwen3vl-8b-thinking"
@@ -68,11 +55,6 @@ def should_rename(filename) -> bool:
     return bool(stem) and not stem[0].isupper()
 
 
-def sanitize_filename(name: str) -> str:
-    sanitized = re.sub(r'[\\/:*?"<>|]', "_", name).strip(" .")
-    return sanitized[:200] if len(sanitized) > 200 else sanitized
-
-
 def get_unique_filename(existing, base_name: str, extension: str) -> str:
     new_name = f"{base_name}{extension}"
     counter = 1
@@ -80,102 +62,6 @@ def get_unique_filename(existing, base_name: str, extension: str) -> str:
         new_name = f"{base_name}_{counter}{extension}"
         counter += 1
     return new_name
-
-
-def encode_image(image_path, ext: str) -> str:
-    path = Path(image_path)
-    if ext == ".webp":
-        if HAS_PILLOW:
-            try:
-                with Image.open(path) as img:
-                    buffered = io.BytesIO()
-                    img.save(buffered, format="PNG")
-                    return base64.b64encode(buffered.getvalue()).decode("utf-8")
-            except Exception as err:
-                write_line(f"  WebP conversion failed: {err}", YELLOW)
-        else:
-            write_line("  WebP detected but Pillow is not installed.", YELLOW)
-            write_line(f"  Import error: {PILLOW_ERROR}", YELLOW)
-            write_line("  Install with: py -m pip install Pillow", YELLOW)
-    return base64.b64encode(path.read_bytes()).decode("utf-8")
-
-
-def parse_title(content: str) -> Optional[str]:
-    """Extract the title from a markdown H1, with XML/bold fallbacks."""
-    if m := re.search(r'^[ \t]*#[ \t]+(.+?)[ \t]*$', content, re.MULTILINE):
-        return m.group(1).strip().rstrip("#").strip()
-    if m := re.search(r'<title>\s*(.*?)\s*</title>', content, re.IGNORECASE | re.DOTALL):
-        return m.group(1).strip()
-    if m := re.search(r'\*\*"?([^"\*]+)"?\*\*', content):
-        return m.group(1).strip().strip(' "')
-    return None
-
-
-def chat_completion(payload: dict[str, Any], headers: dict[str, str],
-                    timeout: int = 300) -> tuple[str, str]:
-    """POST a non-streaming chat completion. Returns (content, reasoning).
-
-    Raises requests.HTTPError on non-2xx, with the server's error body
-    included in the message.
-    """
-    response = requests.post(API_URL, json=payload, headers=headers, timeout=timeout)
-    if not response.ok:
-        raise requests.HTTPError(
-            f"HTTP {response.status_code} {response.reason} — {response.text}",
-            response=response,
-        )
-    message = response.json()["choices"][0]["message"]
-    return message.get("content") or "", message.get("reasoning_content") or ""
-
-
-def get_new_name_from_model(image_path, system_prompt: str, ext: str,
-                            existing_filenames, max_retries: int = 5) -> Optional[str]:
-    path = Path(image_path)
-    base64_data = encode_image(path, ext)
-    mime = {
-        ".png": "image/png", ".gif": "image/gif", ".bmp": "image/bmp",
-        ".webp": "image/png" if HAS_PILLOW else "image/webp",
-    }.get(ext, "image/jpeg")
-    data_url = f"data:{mime};base64,{base64_data}"
-
-    messages = [
-        {"role": "system", "content": f"[Cache buster: {time.time()}]\n\n{system_prompt}"},
-        {"role": "user", "content": [
-            {"type": "text", "text": "Name this artwork."},
-            {"type": "image_url", "image_url": {"url": data_url}},
-        ]},
-    ]
-    headers = {"Content-Type": "application/json"}
-
-    for _ in range(max_retries):
-        payload = {
-            "model": MODEL_NAME,
-            "messages": messages,
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "stream": False,
-        }
-        content, reasoning = chat_completion(payload, headers)
-        target = content if content.strip() else reasoning
-
-        name = parse_title(target)
-        if not name:
-            return None
-
-        if f"{sanitize_filename(name)}{ext}".lower() not in existing_filenames:
-            return name
-
-        write_line(f"  [Notice] '{name}' already exists. Requesting alternative...", YELLOW)
-        messages.append({"role": "assistant", "content": target})
-        messages.append({"role": "user", "content": (
-            f"The title '{name}' already exists in the collection. "
-            "Please explore a different creative angle and provide another "
-            "title using the same markdown format."
-        )})
-        time.sleep(1)
-
-    write_line(f"  [Warning] Exceeded maximum retries for {path.name}.", YELLOW)
-    return None
 
 
 def main() -> None:
@@ -214,7 +100,11 @@ def main() -> None:
         write(f"[{index}/{total}] {relative} ", DIM)
 
         try:
-            new_name = get_new_name_from_model(file_path, system_prompt, ext, existing)
+            new_name = get_new_name_from_model(
+                file_path, system_prompt, ext, existing,
+                api_url=API_URL, model_name=MODEL_NAME,
+                report=lambda message: write_line(message, YELLOW),
+            )
             api_error = None
         except Exception as error:
             new_name = None
