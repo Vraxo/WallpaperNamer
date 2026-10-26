@@ -1,5 +1,5 @@
 # wallpaper_namer.py
-# Run with:  py wallpaper_namer.py
+# Run from the project directory: python src/wallpaper_namer.py
 from __future__ import annotations
 
 import base64
@@ -26,7 +26,7 @@ except Exception as error:
 IMAGE_DIR = Path(r"E:\Images\Wallpapers")
 MODEL_NAME = "qwen3vl-8b-thinking"
 API_URL = "http://localhost:1234/v1/chat/completions"
-SYSTEM_PROMPT_FILE = Path("prompt.md")
+SYSTEM_PROMPT_FILE = Path(__file__).resolve().parent / "prompt.md"
 
 LMS_EXECUTABLE = "lms"
 LMS_LOAD_MODEL = ""
