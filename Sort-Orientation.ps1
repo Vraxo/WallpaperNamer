@@ -35,7 +35,25 @@ if (-not $python) {
     exit 1
 }
 
-$getSizeScript = @'
+$imageExts = @(".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff")
+
+$files = Get-ChildItem -Path $ImageDir -Recurse -File |
+    Where-Object { $imageExts -contains $_.Extension.ToLower() } |
+    Where-Object { $_.Directory.Name -notin @("Portraits", "Landscape", $SquareFolder) }
+
+$paths = $files | ForEach-Object { $_.FullName }
+if ($paths.Count -eq 0) {
+    Write-Host "No images found."
+    exit 0
+}
+
+# Write image paths to a temp file (avoids command-line length limits)
+$tempPaths = [System.IO.Path]::GetTempFileName()
+$paths | Out-File -FilePath $tempPaths -Encoding utf8
+
+# Write the Python helper to a temp .py file (avoids -c argument mangling)
+$tempPy = [System.IO.Path]::GetTempFileName() + ".py"
+@'
 import sys, json
 from PIL import Image
 with open(sys.argv[1]) as f:
@@ -49,32 +67,17 @@ with open(sys.argv[1]) as f:
             print(json.dumps({'path': p, 'w': w, 'h': h, 'ok': True}))
         except Exception as e:
             print(json.dumps({'path': p, 'ok': False, 'error': str(e)}))
-'@
+'@ | Out-File -FilePath $tempPy -Encoding utf8
 
-$imageExts = @(".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff")
-
-$files = Get-ChildItem -Path $ImageDir -Recurse -File |
-    Where-Object { $imageExts -contains $_.Extension.ToLower() } |
-    Where-Object { $_.Directory.Name -notin @("Portraits", "Landscape", $SquareFolder) }
-
-$paths = $files | ForEach-Object { $_.FullName }
-if ($paths.Count -eq 0) {
-    Write-Host "No images found."
-    exit 0
-}
-
-# Write paths to a temp file to avoid command-line length limits
-$tempPaths = [System.IO.Path]::GetTempFileName()
-$paths | Out-File -FilePath $tempPaths -Encoding utf8
-
-# Capture Python stdout to a temp file to avoid PowerShell encoding errors
+# Capture Python stdout to a temp file (avoids PowerShell encoding errors)
 $tempOut = [System.IO.Path]::GetTempFileName()
 try {
-    Start-Process -FilePath $python.Source -ArgumentList "-c", $getSizeScript, $tempPaths `
+    Start-Process -FilePath $python.Source -ArgumentList $tempPy, $tempPaths `
         -RedirectStandardOutput $tempOut -Wait -NoNewWindow
     $output = Get-Content -Path $tempOut
 } finally {
     Remove-Item -Path $tempPaths -ErrorAction SilentlyContinue
+    Remove-Item -Path $tempPy -ErrorAction SilentlyContinue
     Remove-Item -Path $tempOut -ErrorAction SilentlyContinue
 }
 
