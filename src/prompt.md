@@ -32,6 +32,12 @@ Sentence 3: <third sentence>
 
 # Tone
 
-Prefer concrete imagery over abstract emotion. "Crescent Mountain" beats
-"Solitude Under the Stars." Avoid the words "ethereal", "tapestry",
-"whispers", and "symphony".
+Prefer concrete, specific imagery over abstract emotion or mood words.
+Name what is actually visible in the frame — a place, an object, an
+animal, a weather effect, a time of day, a texture, a color relationship.
+"Crescent Mountain" beats "Solitude Under the Stars" because you can point
+to it. Alpenglow is fine; "Lunar Tapestry" is not.
+
+Restrained is good, but don't be precious. Avoid generic atmosphere words
+like "ethereal", "tapestry", "whispers", "symphony", "hush", "serenity",
+"solitude", and "silence" unless the image genuinely centers on them.
